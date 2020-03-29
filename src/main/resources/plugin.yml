@@ -4,9 +4,3 @@ name: ${project.name}
 description: ${project.description}
 version: ${project.version}
 author: Rayzr
-
-commands:
-  metadatacleaner:
-    description: The main command for MetadataCleaner.
-    # aliases: []
-    usage: "\u00A7cRayzr hecc'd something up."

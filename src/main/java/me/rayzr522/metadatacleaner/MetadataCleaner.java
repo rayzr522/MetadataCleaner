@@ -1,130 +1,62 @@
 package me.rayzr522.metadatacleaner;
 
-import me.rayzr522.metadatacleaner.command.CommandMetadataCleaner;
-import me.rayzr522.metadatacleaner.utils.MessageHandler;
-import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.file.YamlConfiguration;
+import net.minecraft.server.v1_8_R3.WorldServer;
+import org.bukkit.World;
+import org.bukkit.craftbukkit.v1_8_R3.CraftWorld;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.world.WorldLoadEvent;
+import org.bukkit.event.world.WorldUnloadEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.logging.Level;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-/**
- * @author Rayzr
- */
-public class MetadataCleaner extends JavaPlugin {
-    private static MetadataCleaner instance;
-    private MessageHandler messages = new MessageHandler();
-
-    /**
-     * @return The current instance of MetadataCleaner.
-     */
-    public static MetadataCleaner getInstance() {
-        return instance;
-    }
+public class MetadataCleaner extends JavaPlugin implements Listener {
+    private final Map<World, MetadataWorldAccess> accessMap = new HashMap<>();
 
     @Override
     public void onEnable() {
-        instance = this;
+        getServer().getPluginManager().registerEvents(this, this);
 
-        // Load configs
-        reload();
-
-        // Set up commands
-        getCommand("metadatacleaner").setExecutor(new CommandMetadataCleaner(this));
+        getServer().getWorlds().forEach(this::linkWorld);
     }
 
     @Override
     public void onDisable() {
-        instance = null;
+        getServer().getWorlds().forEach(this::unlinkWorld);
     }
 
-    /**
-     * (Re)loads all configs from the disk
-     */
-    public void reload() {
-        saveDefaultConfig();
-        reloadConfig();
+    public void linkWorld(World world) {
+        MetadataWorldAccess access = new MetadataWorldAccess();
+        ((CraftWorld) world).getHandle().addIWorldAccess(access);
+        accessMap.put(world, access);
 
-        messages.load(getConfig("messages.yml"));
+        getLogger().info("Registered world access handler for: " + world.getName());
     }
 
-    /**
-     * If the file is not found and there is a default file in the JAR, it saves the default file to the plugin data folder first
-     *
-     * @param path The path to the config file (relative to the plugin data folder)
-     * @return The {@link YamlConfiguration}
-     */
-    public YamlConfiguration getConfig(String path) {
-        if (!getFile(path).exists() && getResource(path) != null) {
-            saveResource(path, true);
-        }
-        return YamlConfiguration.loadConfiguration(getFile(path));
-    }
-
-    /**
-     * Attempts to save a {@link YamlConfiguration} to the disk, with any {@link IOException}s being printed to the console.
-     *
-     * @param config The config to save
-     * @param path   The path to save the config file to (relative to the plugin data folder)
-     */
-    public void saveConfig(YamlConfiguration config, String path) {
+    public void unlinkWorld(World world) {
         try {
-            config.save(getFile(path));
-        } catch (IOException e) {
-            getLogger().log(Level.SEVERE, "Failed to save config", e);
+            WorldServer handle = ((CraftWorld) world).getHandle();
+            Field iAccessListField = handle.getClass().getDeclaredField("u");
+            iAccessListField.setAccessible(true);
+            ((List<?>) iAccessListField.get(handle)).remove(accessMap.remove(world));
+
+            getLogger().info("Unregistered world access handler for: " + world.getName());
+        } catch (IllegalAccessException | NoSuchFieldException ex) {
+            ex.printStackTrace();
         }
     }
 
-    /**
-     * @param path The path of the file (relative to the plugin data folder)
-     * @return The {@link File}
-     */
-    public File getFile(String path) {
-        return new File(getDataFolder(), path.replace('/', File.separatorChar));
+    @EventHandler
+    public void onWorldLoad(WorldLoadEvent e) {
+        linkWorld(e.getWorld());
     }
 
-    /**
-     * Translates a message from the language file.
-     *
-     * @param key     The key of the message to translate
-     * @param objects The formatting objects to use
-     * @return The formatted message
-     */
-    public String tr(String key, Object... objects) {
-        return messages.tr(key, objects);
+    @EventHandler
+    public void onWorldUnload(WorldUnloadEvent e) {
+        unlinkWorld(e.getWorld());
     }
-
-    /**
-     * Checks a target {@link CommandSender} for a given permission, and optionally sends a message if they don't.
-     * <br>
-     * This will automatically prefix any permission with the name of the plugin.
-     *
-     * @param target      The target {@link CommandSender} to check
-     * @param permission  The permission to check, excluding the permission base (which is the plugin name)
-     * @param sendMessage Whether or not to send a no-permission message to the target
-     * @return Whether or not the target has the given permission
-     */
-    public boolean checkPermission(CommandSender target, String permission, boolean sendMessage) {
-        String fullPermission = String.format("%s.%s", getName(), permission);
-
-        if (!target.hasPermission(fullPermission)) {
-            if (sendMessage) {
-                target.sendMessage(tr("no-permission", fullPermission));
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * @return The {@link MessageHandler} instance for this plugin
-     */
-    public MessageHandler getMessages() {
-        return messages;
-    }
-
 }
