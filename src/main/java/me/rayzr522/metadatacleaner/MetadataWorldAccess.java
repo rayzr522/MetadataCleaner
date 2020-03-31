@@ -4,29 +4,13 @@ import net.minecraft.server.v1_8_R3.BlockPosition;
 import net.minecraft.server.v1_8_R3.Entity;
 import net.minecraft.server.v1_8_R3.EntityHuman;
 import net.minecraft.server.v1_8_R3.IWorldAccess;
-import org.bukkit.Bukkit;
-import org.bukkit.craftbukkit.v1_8_R3.CraftServer;
-import org.bukkit.craftbukkit.v1_8_R3.entity.CraftEntity;
-import org.bukkit.craftbukkit.v1_8_R3.metadata.EntityMetadataStore;
-import org.bukkit.metadata.MetadataStoreBase;
-import org.bukkit.metadata.MetadataValue;
-import org.bukkit.plugin.Plugin;
-
-import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
+import org.bukkit.scheduler.BukkitRunnable;
 
 public class MetadataWorldAccess implements IWorldAccess {
-    private static Field metadataMapField = null;
+    private final MetadataCleaner plugin;
 
-    static {
-        try {
-            metadataMapField = MetadataStoreBase.class.getDeclaredField("metadataMap");
-            metadataMapField.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            e.printStackTrace();
-        }
+    public MetadataWorldAccess(MetadataCleaner plugin) {
+        this.plugin = plugin;
     }
 
     @Override
@@ -66,25 +50,7 @@ public class MetadataWorldAccess implements IWorldAccess {
 
     @Override
     public void b(Entity entity) {
-        if (metadataMapField == null) {
-            return;
-        }
-
-        CraftEntity bukkitEntity = entity.getBukkitEntity();
-
-        EntityMetadataStore entityMetadata = ((CraftServer) Bukkit.getServer()).getEntityMetadata();
-
-        try {
-            Map<String, Map<Plugin, MetadataValue>> metadataMap = (Map<String, Map<Plugin, MetadataValue>>) metadataMapField.get(entityMetadata);
-
-            Set<String> collect = metadataMap.keySet().stream()
-                    .filter(key -> key.startsWith(bukkitEntity.getUniqueId().toString()))
-                    .collect(Collectors.toSet());
-
-            collect.forEach(metadataMap::remove);
-        } catch (IllegalAccessException e) {
-            e.printStackTrace();
-        }
+        plugin.getCleanerQueue().addToQueue(entity.getBukkitEntity());
     }
 
     @Override
