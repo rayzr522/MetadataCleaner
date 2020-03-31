@@ -9,9 +9,7 @@ import org.bukkit.metadata.MetadataValue;
 import org.bukkit.plugin.Plugin;
 
 import java.lang.reflect.Field;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
@@ -66,11 +64,11 @@ public class CleanerQueue extends Thread {
             try {
                 UUID entityId = entitiesToClean.take();
 
-                Set<String> collect = metadataMap.keySet().stream()
+                Set<String> collect = new ArrayList<>(metadataMap.keySet()).stream()
                         .filter(key -> key.startsWith(entityId.toString()))
                         .collect(Collectors.toSet());
 
-                collect.forEach(metadataMap::remove);
+                metadataMap.keySet().removeAll(collect);
             } catch (InterruptedException ignored) {
 
             }
